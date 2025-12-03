@@ -1,0 +1,257 @@
+USE master;
+GO
+
+IF EXISTS (SELECT name FROM sys.databases WHERE name = 'QLBanHangDienThoai')
+BEGIN
+    DROP DATABASE QLBanHangDienThoai;
+END
+GO
+
+CREATE DATABASE QLBanHangDienThoai;
+
+USE QLBanHangDienThoai;
+GO
+
+IF OBJECT_ID('dbo.tblNhanVien', 'U') IS NOT NULL DROP TABLE dbo.tblNhanVien;
+
+PRINT N'Đang tạo bảng tblNhanVien...';
+
+CREATE TABLE tblNhanVien (
+    MaNV INT PRIMARY KEY IDENTITY(1,1),
+    TenNV NVARCHAR(200) NOT NULL,
+    GioiTinh NVARCHAR(10) CHECK (GioiTinh IN (N'Nam', N'Nữ', N'Khác')),
+    NgaySinh DATE,
+    SoDT VARCHAR(15) NOT NULL UNIQUE,
+    Email VARCHAR(100) UNIQUE,
+    DiaChi NVARCHAR(500),
+    ChucVu NVARCHAR(100) NOT NULL,
+    Luong DECIMAL(18,2) CHECK (Luong >= 0),
+    NgayVaoLam DATE NOT NULL,
+    TrangThai BIT DEFAULT 1,
+    TaiKhoan VARCHAR(50) UNIQUE,
+    MatKhau VARCHAR(255),
+    GhiChu NVARCHAR(MAX),
+);
+
+PRINT N'✓ Tạo bảng tblNhanVien thành công';
+
+GO
+
+PRINT N'Đang tạo bảng tblDienThoai...';
+CREATE TABLE tblDienThoai (
+    MaDT INT PRIMARY KEY IDENTITY(1,1),
+    TenDT NVARCHAR(200) NOT NULL,
+    HangSX NVARCHAR(100) NOT NULL,
+    GiaBan DECIMAL(18,2) NOT NULL CHECK (GiaBan >= 0),
+    ManHinh NVARCHAR(100),
+    Camera NVARCHAR(100),
+    Pin NVARCHAR(50),
+    RAM NVARCHAR(20),
+    BoNho NVARCHAR(20),
+    MauSac NVARCHAR(50),
+    MoTa NVARCHAR(MAX),
+    TrangThai BIT DEFAULT 1,
+    -- Audit Trail
+    NguoiNhap INT NOT NULL,
+    NgayNhap DATETIME DEFAULT GETDATE(),
+    NguoiSua INT NULL,
+    NgaySua DATETIME NULL,
+    FOREIGN KEY (NguoiNhap) REFERENCES tblNhanVien(MaNV),
+    FOREIGN KEY (NguoiSua) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Tạo bảng tblDienThoai thành công';
+GO
+
+PRINT N'Đang tạo bảng tblKhachHang...';
+-- Bảng Khách hàng
+CREATE TABLE tblKhachHang (
+    MaKH INT PRIMARY KEY IDENTITY(1,1),
+    TenKH NVARCHAR(200) NOT NULL,
+    GioiTinh NVARCHAR(10) CHECK (GioiTinh IN (N'Nam', N'Nữ', N'Khác')),
+    NgaySinh DATE,
+    SoDT VARCHAR(15) NOT NULL UNIQUE,
+    Email VARCHAR(100) UNIQUE,
+    DiaChi NVARCHAR(500),
+    TichDiem INT DEFAULT 0 CHECK (TichDiem >= 0),
+    GhiChu NVARCHAR(MAX),
+    -- Audit Trail
+    NguoiNhap INT NOT NULL,
+    NgayNhap DATETIME DEFAULT GETDATE(),
+    NguoiSua INT NULL,
+    NgaySua DATETIME NULL,
+    FOREIGN KEY (NguoiNhap) REFERENCES tblNhanVien(MaNV),
+    FOREIGN KEY (NguoiSua) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Tạo bảng tblKhachHang thành công';
+
+PRINT N'Đang tạo bảng tblHoaDon...';
+-- Bảng Hóa đơn
+CREATE TABLE tblHoaDon (
+    MaHD INT PRIMARY KEY IDENTITY(1,1),
+    MaKH INT NOT NULL,
+    MaNV INT NOT NULL,
+    NgayLap DATETIME DEFAULT GETDATE(),
+    TongTien DECIMAL(18,2) DEFAULT 0 CHECK (TongTien >= 0),
+    GhiChu NVARCHAR(MAX),
+    FOREIGN KEY (MaKH) REFERENCES tblKhachHang(MaKH),
+    FOREIGN KEY (MaNV) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Tạo bảng tblHoaDon thành công';
+
+GO
+
+PRINT N'Đang tạo bảng tblCTHoaDon...';
+-- Bảng Chi tiết hóa đơn
+CREATE TABLE tblCTHoaDon (
+    MaCT INT PRIMARY KEY IDENTITY(1,1),
+    MaHD INT NOT NULL,
+    MaDT INT NOT NULL,
+    SoLuong INT NOT NULL CHECK (SoLuong > 0),
+    DonGia DECIMAL(18,2) NOT NULL CHECK (DonGia >= 0),
+    GiamGia DECIMAL(18,2) DEFAULT 0 CHECK (GiamGia >= 0),
+    ThanhTien DECIMAL(18,2) NOT NULL CHECK (ThanhTien >= 0),
+    FOREIGN KEY (MaHD) REFERENCES tblHoaDon(MaHD) ON DELETE CASCADE,
+    FOREIGN KEY (MaDT) REFERENCES tblDienThoai(MaDT)
+);
+
+PRINT N'✓ Tạo bảng tblCTHoaDon thành công';
+
+INSERT INTO tblNhanVien (TenNV, GioiTinh, NgaySinh, SoDT, Email, DiaChi, ChucVu, Luong, NgayVaoLam, TaiKhoan, MatKhau, TrangThai)
+VALUES
+(N'Nguyễn Văn An', N'Nam', '1985-03-15', '0901234567', 'annv@phoneshop.vn',
+ N'123 Nguyễn Huệ, Quận 1, TP.HCM', N'Quản lý cửa hàng', 20000000, '2020-01-01', 'admin', '123456', 1),
+
+(N'Trần Thị Bình', N'Nữ', '1992-07-20', '0912345678', 'binhtt@phoneshop.vn',
+ N'456 Lê Lợi, Quận 1, TP.HCM', N'Nhân viên bán hàng', 10000000, '2021-03-15', 'binhtt', '123456', 1),
+
+(N'Lê Văn Cường', N'Nam', '1990-11-08', '0923456789', 'cuonglv@phoneshop.vn',
+ N'789 Trần Hưng Đạo, Quận 5, TP.HCM', N'Nhân viên bán hàng', 10000000, '2021-06-01', 'cuonglv', '123456', 1),
+
+(N'Phạm Thị Dung', N'Nữ', '1995-05-12', '0934567890', 'dungpt@phoneshop.vn',
+ N'321 Hai Bà Trưng, Quận 3, TP.HCM', N'Nhân viên kỹ thuật', 12000000, '2022-01-10', 'dungpt', '123456', 1),
+
+(N'Hoàng Văn Em', N'Nam', '1988-09-25', '0945678901', 'emhv@phoneshop.vn',
+ N'654 Võ Văn Tần, Quận 3, TP.HCM', N'Trưởng phòng kinh doanh', 18000000, '2020-06-15', 'emhv', '123456', 1);
+
+PRINT N'✓ Đã chèn 5 bản ghi vào tblNhanVien';
+GO
+
+PRINT N'Đang chèn dữ liệu vào tblDienThoai...';
+GO
+
+INSERT INTO tblDienThoai (TenDT, HangSX, GiaBan, ManHinh, Camera, Pin, RAM, BoNho, MauSac, MoTa, TrangThai, NguoiNhap, NgayNhap)
+VALUES
+(N'iPhone 15 Pro Max', N'Apple', 29990000,
+ N'6.7" Super Retina XDR', N'48MP Main + 12MP Ultra Wide + 12MP Telephoto',
+ N'4422 mAh', N'8GB', N'256GB', N'Titan Tự Nhiên',
+ N'iPhone 15 Pro Max với chip A17 Pro, khung Titan cao cấp, camera 48MP cải tiến', 1, 1, '2024-01-15 08:00:00'),
+
+(N'iPhone 14', N'Apple', 19990000,
+ N'6.1" Super Retina XDR', N'12MP Main + 12MP Ultra Wide',
+ N'3279 mAh', N'6GB', N'128GB', N'Đen',
+ N'iPhone 14 với chip A15 Bionic, camera kép 12MP, thiết kế sang trọng', 1, 1, '2024-01-15 08:10:00'),
+
+(N'Samsung Galaxy S24 Ultra', N'Samsung', 28990000,
+ N'6.8" Dynamic AMOLED 2X', N'200MP Wide + 50MP Telephoto + 12MP Ultra Wide',
+ N'5000 mAh', N'12GB', N'256GB', N'Đen Titan',
+ N'Galaxy S24 Ultra với camera 200MP, bút S Pen, hiệu năng đỉnh cao', 1, 1, '2024-01-15 08:20:00'),
+
+(N'Samsung Galaxy A54', N'Samsung', 10990000,
+ N'6.4" Super AMOLED', N'50MP OIS + 12MP Ultra Wide + 5MP Macro',
+ N'5000 mAh', N'8GB', N'128GB', N'Xanh Mint',
+ N'Galaxy A54 tầm trung với camera 50MP OIS, pin 5000mAh, sạc nhanh 25W', 1, 2, '2024-01-20 09:00:00'),
+
+(N'Xiaomi 14', N'Xiaomi', 18990000,
+ N'6.36" AMOLED', N'50MP Leica + 50MP Telephoto + 50MP Ultra Wide',
+ N'4610 mAh', N'12GB', N'256GB', N'Đen',
+ N'Xiaomi 14 với camera Leica, chip Snapdragon 8 Gen 3, sạc nhanh 90W', 1, 2, '2024-02-01 10:00:00'),
+
+(N'OPPO Reno11', N'OPPO', 9990000,
+ N'6.7" AMOLED', N'50MP + 32MP Telephoto + 8MP Ultra Wide',
+ N'4800 mAh', N'8GB', N'256GB', N'Xanh Lục',
+ N'OPPO Reno11 thiết kế mỏng nhẹ, camera chân dung xuất sắc', 1, 2, '2024-02-10 11:00:00'),
+
+(N'Vivo V29', N'Vivo', 11990000,
+ N'6.78" AMOLED', N'50MP OIS + 8MP Ultra Wide',
+ N'4600 mAh', N'12GB', N'256GB', N'Tím',
+ N'Vivo V29 với camera selfie 50MP, thiết kế đổi màu độc đáo', 1, 3, '2024-02-15 14:00:00'),
+
+(N'Realme 11 Pro', N'Realme', 8990000,
+ N'6.7" AMOLED', N'100MP + 2MP Depth',
+ N'5000 mAh', N'8GB', N'256GB', N'Xanh Oasis',
+ N'Realme 11 Pro camera 100MP, sạc nhanh 67W, giá tốt', 1, 3, '2024-03-01 15:00:00');
+
+PRINT N'✓ Đã chèn 8 bản ghi vào tblDienThoai';
+GO
+
+PRINT N'Đang chèn dữ liệu vào tblKhachHang...';
+GO
+
+INSERT INTO tblKhachHang (TenKH, GioiTinh, NgaySinh, SoDT, Email, DiaChi, TichDiem, NguoiNhap, NgayNhap)
+VALUES
+(N'Võ Thị Hoa', N'Nữ', '1990-04-12', '0956789012', 'hoavt@gmail.com',
+ N'45 Pasteur, Quận 1, TP.HCM', 250, 2, '2024-01-10 10:00:00'),
+
+(N'Đặng Văn Hùng', N'Nam', '1985-08-20', '0967890123', 'hungdv@gmail.com',
+ N'78 Điện Biên Phủ, Quận 10, TP.HCM', 850, 2, '2024-01-15 11:00:00'),
+
+(N'Bùi Thị Lan', N'Nữ', '1993-11-05', '0978901234', 'lanbt@gmail.com',
+ N'90 Nguyễn Đình Chiểu, Quận 3, TP.HCM', 120, 2, '2024-02-01 09:30:00'),
+
+(N'Phan Văn Minh', N'Nam', '1988-02-18', '0989012345', 'minhpv@gmail.com',
+ N'123 Cách Mạng Tháng 8, Quận 3, TP.HCM', 1500, 3, '2024-02-10 14:00:00'),
+
+(N'Ngô Thị Nhung', N'Nữ', '1995-06-30', '0990123456', 'nhungnt@gmail.com',
+ N'234 Lê Văn Sỹ, Quận Phú Nhuận, TP.HCM', 60, 3, '2024-02-20 10:30:00'),
+
+(N'Trương Văn Phúc', N'Nam', '1992-12-15', '0991234567', 'phuctv@gmail.com',
+ N'567 Hoàng Văn Thụ, Quận Tân Bình, TP.HCM', 420, 3, '2024-03-01 11:00:00'),
+
+(N'Lý Thị Quỳnh', N'Nữ', '1987-09-22', '0992345678', 'quynhlt@gmail.com',
+ N'890 Trường Chinh, Quận Tân Phú, TP.HCM', 680, 2, '2024-03-10 15:00:00');
+
+PRINT N'✓ Đã chèn 7 bản ghi vào tblKhachHang';
+GO
+
+PRINT N'Đang chèn dữ liệu vào tblHoaDon...';
+GO
+
+INSERT INTO tblHoaDon (MaKH, MaNV, NgayLap, TongTien, GhiChu)
+VALUES
+(1, 2, '2024-11-15 10:30:00', 29990000, N'Khách hàng mua iPhone 15 Pro Max'),
+(2, 2, '2024-11-18 14:15:00', 37980000, N'Khách hàng VIP - Giảm giá 1 triệu'),
+(3, 3, '2024-11-20 09:45:00', 10990000, N'Khách mua Samsung A54'),
+(4, 3, '2024-11-25 16:20:00', 45980000, N'Khách hàng mua combo iPhone + OPPO'),
+(5, 2, '2024-12-01 11:00:00', 19490000, N'Khách hàng mua iPhone 14');
+
+PRINT N'✓ Đã chèn 5 bản ghi vào tblHoaDon';
+GO
+
+PRINT N'Đang chèn dữ liệu vào tblCTHoaDon...';
+GO
+
+-- Hóa đơn 1: Mua 1 iPhone 15 Pro Max
+INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
+VALUES (1, 1, 1, 29990000, 0, 29990000);
+
+-- Hóa đơn 2: Mua iPhone 14 + Xiaomi 14
+INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
+VALUES
+(2, 2, 1, 19990000, 0, 19990000),
+(2, 5, 1, 18990000, 1000000, 17990000);
+
+-- Hóa đơn 3: Mua Samsung A54
+INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
+VALUES (3, 4, 1, 10990000, 0, 10990000);
+
+-- Hóa đơn 4: Mua iPhone 15 Pro Max + 2 OPPO Reno11
+INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
+VALUES
+(4, 1, 1, 29990000, 1000000, 28990000),
+(4, 6, 2, 9990000, 1000000, 16990000);
+
+-- Hóa đơn 5: Mua iPhone 14 (có giảm giá)
+INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
+VALUES (5, 2, 1, 19990000, 500000, 19490000);
+
+PRINT N'✓ Đã chèn 9 bản ghi vào tblCTHoaDon';
