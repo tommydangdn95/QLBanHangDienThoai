@@ -255,3 +255,213 @@ INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
 VALUES (5, 2, 1, 19990000, 500000, 19490000);
 
 PRINT N'✓ Đã chèn 9 bản ghi vào tblCTHoaDon';
+
+GO
+
+PRINT N'Đang tạo các view phục vụ khai thác dữ liệu...';
+
+-- View 1: Danh sách nhân viên đang hoạt động
+IF OBJECT_ID('dbo.vwThongTinNhanVienHienHanh', 'V') IS NOT NULL DROP VIEW dbo.vwThongTinNhanVienHienHanh;
+GO
+CREATE VIEW dbo.vwThongTinNhanVienHienHanh
+AS
+SELECT
+    MaNV,
+    TenNV,
+    GioiTinh,
+    NgaySinh,
+    SoDT,
+    Email,
+    ChucVu,
+    Luong,
+    NgayVaoLam,
+    DATEDIFF(DAY, NgayVaoLam, GETDATE()) AS SoNgayCongTac
+FROM dbo.tblNhanVien
+WHERE TrangThai = 1;
+GO
+
+PRINT N'✓ Tạo view vwThongTinNhanVienHienHanh';
+GO
+
+-- View 2: Thông tin điện thoại đang mở bán
+IF OBJECT_ID('dbo.vwDanhSachDienThoaiDangBan', 'V') IS NOT NULL DROP VIEW dbo.vwDanhSachDienThoaiDangBan;
+GO
+CREATE VIEW dbo.vwDanhSachDienThoaiDangBan
+AS
+SELECT
+    MaDT,
+    TenDT,
+    HangSX,
+    GiaBan,
+    ManHinh,
+    Camera,
+    Pin,
+    RAM,
+    BoNho,
+    MauSac,
+    TrangThai
+FROM dbo.tblDienThoai
+WHERE TrangThai = 1;
+GO
+
+PRINT N'✓ Tạo view vwDanhSachDienThoaiDangBan';
+GO
+
+-- View 3: Khách hàng có tích điểm cao
+IF OBJECT_ID('dbo.vwKhachHangTichDiemCao', 'V') IS NOT NULL DROP VIEW dbo.vwKhachHangTichDiemCao;
+GO
+CREATE VIEW dbo.vwKhachHangTichDiemCao
+AS
+SELECT
+    MaKH,
+    TenKH,
+    GioiTinh,
+    SoDT,
+    Email,
+    DiaChi,
+    TichDiem
+FROM dbo.tblKhachHang
+WHERE TichDiem >= 500;
+GO
+
+PRINT N'✓ Tạo view vwKhachHangTichDiemCao';
+GO
+
+-- View 4: Tổng hợp thông tin hóa đơn
+IF OBJECT_ID('dbo.vwHoaDonTongHop', 'V') IS NOT NULL DROP VIEW dbo.vwHoaDonTongHop;
+GO
+CREATE VIEW dbo.vwHoaDonTongHop
+AS
+SELECT
+    hd.MaHD,
+    hd.NgayLap,
+    hd.TongTien,
+    hd.GhiChu,
+    kh.MaKH,
+    kh.TenKH,
+    nv.MaNV,
+    nv.TenNV AS TenNhanVien
+FROM dbo.tblHoaDon AS hd
+INNER JOIN dbo.tblKhachHang AS kh ON kh.MaKH = hd.MaKH
+INNER JOIN dbo.tblNhanVien AS nv ON nv.MaNV = hd.MaNV;
+GO
+
+PRINT N'✓ Tạo view vwHoaDonTongHop';
+GO
+
+-- View 5: Chi tiết sản phẩm trong hóa đơn
+IF OBJECT_ID('dbo.vwChiTietHoaDonSanPham', 'V') IS NOT NULL DROP VIEW dbo.vwChiTietHoaDonSanPham;
+GO
+CREATE VIEW dbo.vwChiTietHoaDonSanPham
+AS
+SELECT
+    cthd.MaCT,
+    cthd.MaHD,
+    hd.NgayLap,
+    cthd.MaDT,
+    dt.TenDT,
+    cthd.SoLuong,
+    cthd.DonGia,
+    cthd.GiamGia,
+    cthd.ThanhTien
+FROM dbo.tblCTHoaDon AS cthd
+INNER JOIN dbo.tblHoaDon AS hd ON hd.MaHD = cthd.MaHD
+INNER JOIN dbo.tblDienThoai AS dt ON dt.MaDT = cthd.MaDT;
+GO
+
+PRINT N'✓ Tạo view vwChiTietHoaDonSanPham';
+GO
+
+-- View 6: Doanh thu theo ngày
+IF OBJECT_ID('dbo.vwDoanhThuTheoNgay', 'V') IS NOT NULL DROP VIEW dbo.vwDoanhThuTheoNgay;
+GO
+CREATE VIEW dbo.vwDoanhThuTheoNgay
+AS
+SELECT
+    CAST(NgayLap AS DATE) AS Ngay,
+    SUM(TongTien) AS TongDoanhThu,
+    COUNT(*) AS SoHoaDon
+FROM dbo.tblHoaDon
+GROUP BY CAST(NgayLap AS DATE);
+GO
+
+PRINT N'✓ Tạo view vwDoanhThuTheoNgay';
+GO
+
+-- View 7: Doanh thu theo nhân viên lập hóa đơn
+IF OBJECT_ID('dbo.vwDoanhThuTheoNhanVien', 'V') IS NOT NULL DROP VIEW dbo.vwDoanhThuTheoNhanVien;
+GO
+CREATE VIEW dbo.vwDoanhThuTheoNhanVien
+AS
+SELECT
+    nv.MaNV,
+    nv.TenNV,
+    nv.ChucVu,
+    SUM(hd.TongTien) AS TongDoanhThu,
+    COUNT(hd.MaHD) AS SoHoaDon
+FROM dbo.tblNhanVien AS nv
+INNER JOIN dbo.tblHoaDon AS hd ON hd.MaNV = nv.MaNV
+GROUP BY nv.MaNV, nv.TenNV, nv.ChucVu;
+GO
+
+PRINT N'✓ Tạo view vwDoanhThuTheoNhanVien';
+GO
+
+-- View 8: Sản phẩm bán chạy theo số lượng
+IF OBJECT_ID('dbo.vwSanPhamBanChay', 'V') IS NOT NULL DROP VIEW dbo.vwSanPhamBanChay;
+GO
+CREATE VIEW dbo.vwSanPhamBanChay
+AS
+SELECT
+    dt.MaDT,
+    dt.TenDT,
+    dt.HangSX,
+    SUM(cthd.SoLuong) AS TongSoLuongBan,
+    SUM(cthd.ThanhTien) AS TongDoanhThu
+FROM dbo.tblDienThoai AS dt
+INNER JOIN dbo.tblCTHoaDon AS cthd ON cthd.MaDT = dt.MaDT
+GROUP BY dt.MaDT, dt.TenDT, dt.HangSX;
+GO
+
+PRINT N'✓ Tạo view vwSanPhamBanChay';
+GO
+
+-- View 9: Lịch sử cập nhật điện thoại (ghi nhận người nhập/sửa)
+IF OBJECT_ID('dbo.vwLichSuCapNhatDienThoai', 'V') IS NOT NULL DROP VIEW dbo.vwLichSuCapNhatDienThoai;
+GO
+CREATE VIEW dbo.vwLichSuCapNhatDienThoai
+AS
+SELECT
+    dt.MaDT,
+    dt.TenDT,
+    dt.NgayNhap,
+    nvNhap.TenNV AS NguoiNhap,
+    dt.NgaySua,
+    nvSua.TenNV AS NguoiSua
+FROM dbo.tblDienThoai AS dt
+INNER JOIN dbo.tblNhanVien AS nvNhap ON nvNhap.MaNV = dt.NguoiNhap
+LEFT JOIN dbo.tblNhanVien AS nvSua ON nvSua.MaNV = dt.NguoiSua;
+GO
+
+PRINT N'✓ Tạo view vwLichSuCapNhatDienThoai';
+GO
+
+-- View 10: Hóa đơn phát sinh trong 30 ngày gần nhất
+IF OBJECT_ID('dbo.vwHoaDonGanDay', 'V') IS NOT NULL DROP VIEW dbo.vwHoaDonGanDay;
+GO
+CREATE VIEW dbo.vwHoaDonGanDay
+AS
+SELECT
+    hd.MaHD,
+    hd.NgayLap,
+    hd.TongTien,
+    kh.TenKH,
+    nv.TenNV AS TenNhanVien
+FROM dbo.tblHoaDon AS hd
+INNER JOIN dbo.tblKhachHang AS kh ON kh.MaKH = hd.MaKH
+INNER JOIN dbo.tblNhanVien AS nv ON nv.MaNV = hd.MaNV
+WHERE hd.NgayLap >= DATEADD(DAY, -30, GETDATE());
+GO
+
+PRINT N'✓ Tạo view vwHoaDonGanDay';
+GO
