@@ -465,3 +465,160 @@ GO
 
 PRINT N'✓ Tạo view vwHoaDonGanDay';
 GO
+
+PRINT N'Đang tạo các thủ tục thao tác dữ liệu...';
+GO
+
+-- Proc 1: Thêm khách hàng mới có ghi nhận người nhập
+IF OBJECT_ID('dbo.spThemKhachHangMoi', 'P') IS NOT NULL DROP PROCEDURE dbo.spThemKhachHangMoi;
+GO
+CREATE PROCEDURE dbo.spThemKhachHangMoi
+    @TenKH NVARCHAR(200),
+    @GioiTinh NVARCHAR(10),
+    @NgaySinh DATE = NULL,
+    @SoDT VARCHAR(15),
+    @Email VARCHAR(100) = NULL,
+    @DiaChi NVARCHAR(500) = NULL,
+    @NguoiNhap INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO dbo.tblKhachHang (TenKH, GioiTinh, NgaySinh, SoDT, Email, DiaChi, TichDiem, NguoiNhap, NgayNhap)
+    VALUES (@TenKH, @GioiTinh, @NgaySinh, @SoDT, @Email, @DiaChi, 0, @NguoiNhap, GETDATE());
+
+    SELECT SCOPE_IDENTITY() AS MaKhachHangMoi;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spThemKhachHangMoi';
+GO
+
+EXEC dbo.spThemKhachHangMoi
+    @TenKH = N'Khách hàng demo',
+    @GioiTinh = N'Nam',
+    @NgaySinh = '1995-01-01',
+    @SoDT = '0911111999',
+    @Email = 'demo_customer@gmail.com',
+    @DiaChi = N'12 Nguyễn Trãi, TP.HCM',
+    @NguoiNhap = 2;
+GO
+
+-- Proc 2: Cập nhật giá bán điện thoại và ghi nhận người sửa
+IF OBJECT_ID('dbo.spCapNhatGiaBanDienThoai', 'P') IS NOT NULL DROP PROCEDURE dbo.spCapNhatGiaBanDienThoai;
+GO
+CREATE PROCEDURE dbo.spCapNhatGiaBanDienThoai
+    @MaDT INT,
+    @GiaBanMoi DECIMAL(18,2),
+    @NguoiSua INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.tblDienThoai
+    SET GiaBan = @GiaBanMoi,
+        NguoiSua = @NguoiSua,
+        NgaySua = GETDATE()
+    WHERE MaDT = @MaDT;
+
+    SELECT MaDT, TenDT, GiaBan FROM dbo.tblDienThoai WHERE MaDT = @MaDT;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spCapNhatGiaBanDienThoai';
+GO
+
+EXEC dbo.spCapNhatGiaBanDienThoai
+    @MaDT = 2,
+    @GiaBanMoi = 20500000,
+    @NguoiSua = 1;
+GO
+
+-- Proc 3: Lấy doanh thu theo khoảng thời gian, có thể lọc theo nhân viên
+IF OBJECT_ID('dbo.spLayDoanhThuNhanVienTrongKhoang', 'P') IS NOT NULL DROP PROCEDURE dbo.spLayDoanhThuNhanVienTrongKhoang;
+GO
+CREATE PROCEDURE dbo.spLayDoanhThuNhanVienTrongKhoang
+    @TuNgay DATE,
+    @DenNgay DATE,
+    @MaNV INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        hd.MaNV,
+        nv.TenNV,
+        SUM(hd.TongTien) AS TongDoanhThu,
+        COUNT(hd.MaHD) AS SoHoaDon
+    FROM dbo.tblHoaDon AS hd
+    INNER JOIN dbo.tblNhanVien AS nv ON nv.MaNV = hd.MaNV
+    WHERE hd.NgayLap >= @TuNgay
+      AND hd.NgayLap < DATEADD(DAY, 1, @DenNgay)
+      AND (@MaNV IS NULL OR hd.MaNV = @MaNV)
+    GROUP BY hd.MaNV, nv.TenNV;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spLayDoanhThuNhanVienTrongKhoang';
+GO
+
+EXEC dbo.spLayDoanhThuNhanVienTrongKhoang
+    @TuNgay = '2024-11-01',
+    @DenNgay = '2024-12-31',
+    @MaNV = NULL;
+GO
+
+-- Proc 4: Thống kê sản phẩm bán chạy theo số lượng tùy theo TOP
+IF OBJECT_ID('dbo.spThongKeSanPhamBanChay', 'P') IS NOT NULL DROP PROCEDURE dbo.spThongKeSanPhamBanChay;
+GO
+CREATE PROCEDURE dbo.spThongKeSanPhamBanChay
+    @Top INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP (@Top)
+        dt.MaDT,
+        dt.TenDT,
+        dt.HangSX,
+        SUM(cthd.SoLuong) AS TongSoLuong,
+        SUM(cthd.ThanhTien) AS TongDoanhThu
+    FROM dbo.tblDienThoai AS dt
+    INNER JOIN dbo.tblCTHoaDon AS cthd ON cthd.MaDT = dt.MaDT
+    GROUP BY dt.MaDT, dt.TenDT, dt.HangSX
+    ORDER BY SUM(cthd.SoLuong) DESC;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spThongKeSanPhamBanChay';
+GO
+
+EXEC dbo.spThongKeSanPhamBanChay @Top = 3;
+GO
+
+-- Proc 5: Tìm kiếm điện thoại theo từ khóa tên hoặc hãng
+IF OBJECT_ID('dbo.spTimKiemDienThoaiTheoTuKhoa', 'P') IS NOT NULL DROP PROCEDURE dbo.spTimKiemDienThoaiTheoTuKhoa;
+GO
+CREATE PROCEDURE dbo.spTimKiemDienThoaiTheoTuKhoa
+    @TuKhoa NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        MaDT,
+        TenDT,
+        HangSX,
+        GiaBan,
+        MauSac
+    FROM dbo.tblDienThoai
+    WHERE TenDT LIKE N'%' + @TuKhoa + N'%'
+       OR HangSX LIKE N'%' + @TuKhoa + N'%';
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spTimKiemDienThoaiTheoTuKhoa';
+GO
+
+EXEC dbo.spTimKiemDienThoaiTheoTuKhoa @TuKhoa = N'iPhone';
+GO
