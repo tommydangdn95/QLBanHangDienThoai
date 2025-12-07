@@ -255,3 +255,735 @@ INSERT INTO tblCTHoaDon (MaHD, MaDT, SoLuong, DonGia, GiamGia, ThanhTien)
 VALUES (5, 2, 1, 19990000, 500000, 19490000);
 
 PRINT N'✓ Đã chèn 9 bản ghi vào tblCTHoaDon';
+
+GO
+
+PRINT N'Đang tạo các view phục vụ khai thác dữ liệu...';
+
+-- View 1: Danh sách nhân viên đang hoạt động
+IF OBJECT_ID('dbo.vwThongTinNhanVienHienHanh', 'V') IS NOT NULL DROP VIEW dbo.vwThongTinNhanVienHienHanh;
+GO
+CREATE VIEW dbo.vwThongTinNhanVienHienHanh
+AS
+SELECT
+    MaNV,
+    TenNV,
+    GioiTinh,
+    NgaySinh,
+    SoDT,
+    Email,
+    ChucVu,
+    Luong,
+    NgayVaoLam,
+    DATEDIFF(DAY, NgayVaoLam, GETDATE()) AS SoNgayCongTac
+FROM dbo.tblNhanVien
+WHERE TrangThai = 1;
+GO
+
+PRINT N'✓ Tạo view vwThongTinNhanVienHienHanh';
+GO
+
+-- View 2: Thông tin điện thoại đang mở bán
+IF OBJECT_ID('dbo.vwDanhSachDienThoaiDangBan', 'V') IS NOT NULL DROP VIEW dbo.vwDanhSachDienThoaiDangBan;
+GO
+CREATE VIEW dbo.vwDanhSachDienThoaiDangBan
+AS
+SELECT
+    MaDT,
+    TenDT,
+    HangSX,
+    GiaBan,
+    ManHinh,
+    Camera,
+    Pin,
+    RAM,
+    BoNho,
+    MauSac,
+    TrangThai
+FROM dbo.tblDienThoai
+WHERE TrangThai = 1;
+GO
+
+PRINT N'✓ Tạo view vwDanhSachDienThoaiDangBan';
+GO
+
+-- View 3: Khách hàng có tích điểm cao
+IF OBJECT_ID('dbo.vwKhachHangTichDiemCao', 'V') IS NOT NULL DROP VIEW dbo.vwKhachHangTichDiemCao;
+GO
+CREATE VIEW dbo.vwKhachHangTichDiemCao
+AS
+SELECT
+    MaKH,
+    TenKH,
+    GioiTinh,
+    SoDT,
+    Email,
+    DiaChi,
+    TichDiem
+FROM dbo.tblKhachHang
+WHERE TichDiem >= 500;
+GO
+
+PRINT N'✓ Tạo view vwKhachHangTichDiemCao';
+GO
+
+-- View 4: Tổng hợp thông tin hóa đơn
+IF OBJECT_ID('dbo.vwHoaDonTongHop', 'V') IS NOT NULL DROP VIEW dbo.vwHoaDonTongHop;
+GO
+CREATE VIEW dbo.vwHoaDonTongHop
+AS
+SELECT
+    hd.MaHD,
+    hd.NgayLap,
+    hd.TongTien,
+    hd.GhiChu,
+    kh.MaKH,
+    kh.TenKH,
+    nv.MaNV,
+    nv.TenNV AS TenNhanVien
+FROM dbo.tblHoaDon AS hd
+INNER JOIN dbo.tblKhachHang AS kh ON kh.MaKH = hd.MaKH
+INNER JOIN dbo.tblNhanVien AS nv ON nv.MaNV = hd.MaNV;
+GO
+
+PRINT N'✓ Tạo view vwHoaDonTongHop';
+GO
+
+-- View 5: Chi tiết sản phẩm trong hóa đơn
+IF OBJECT_ID('dbo.vwChiTietHoaDonSanPham', 'V') IS NOT NULL DROP VIEW dbo.vwChiTietHoaDonSanPham;
+GO
+CREATE VIEW dbo.vwChiTietHoaDonSanPham
+AS
+SELECT
+    cthd.MaCT,
+    cthd.MaHD,
+    hd.NgayLap,
+    cthd.MaDT,
+    dt.TenDT,
+    cthd.SoLuong,
+    cthd.DonGia,
+    cthd.GiamGia,
+    cthd.ThanhTien
+FROM dbo.tblCTHoaDon AS cthd
+INNER JOIN dbo.tblHoaDon AS hd ON hd.MaHD = cthd.MaHD
+INNER JOIN dbo.tblDienThoai AS dt ON dt.MaDT = cthd.MaDT;
+GO
+
+PRINT N'✓ Tạo view vwChiTietHoaDonSanPham';
+GO
+
+-- View 6: Doanh thu theo ngày
+IF OBJECT_ID('dbo.vwDoanhThuTheoNgay', 'V') IS NOT NULL DROP VIEW dbo.vwDoanhThuTheoNgay;
+GO
+CREATE VIEW dbo.vwDoanhThuTheoNgay
+AS
+SELECT
+    CAST(NgayLap AS DATE) AS Ngay,
+    SUM(TongTien) AS TongDoanhThu,
+    COUNT(*) AS SoHoaDon
+FROM dbo.tblHoaDon
+GROUP BY CAST(NgayLap AS DATE);
+GO
+
+PRINT N'✓ Tạo view vwDoanhThuTheoNgay';
+GO
+
+-- View 7: Doanh thu theo nhân viên lập hóa đơn
+IF OBJECT_ID('dbo.vwDoanhThuTheoNhanVien', 'V') IS NOT NULL DROP VIEW dbo.vwDoanhThuTheoNhanVien;
+GO
+CREATE VIEW dbo.vwDoanhThuTheoNhanVien
+AS
+SELECT
+    nv.MaNV,
+    nv.TenNV,
+    nv.ChucVu,
+    SUM(hd.TongTien) AS TongDoanhThu,
+    COUNT(hd.MaHD) AS SoHoaDon
+FROM dbo.tblNhanVien AS nv
+INNER JOIN dbo.tblHoaDon AS hd ON hd.MaNV = nv.MaNV
+GROUP BY nv.MaNV, nv.TenNV, nv.ChucVu;
+GO
+
+PRINT N'✓ Tạo view vwDoanhThuTheoNhanVien';
+GO
+
+-- View 8: Sản phẩm bán chạy theo số lượng
+IF OBJECT_ID('dbo.vwSanPhamBanChay', 'V') IS NOT NULL DROP VIEW dbo.vwSanPhamBanChay;
+GO
+CREATE VIEW dbo.vwSanPhamBanChay
+AS
+SELECT
+    dt.MaDT,
+    dt.TenDT,
+    dt.HangSX,
+    SUM(cthd.SoLuong) AS TongSoLuongBan,
+    SUM(cthd.ThanhTien) AS TongDoanhThu
+FROM dbo.tblDienThoai AS dt
+INNER JOIN dbo.tblCTHoaDon AS cthd ON cthd.MaDT = dt.MaDT
+GROUP BY dt.MaDT, dt.TenDT, dt.HangSX;
+GO
+
+PRINT N'✓ Tạo view vwSanPhamBanChay';
+GO
+
+-- View 9: Lịch sử cập nhật điện thoại (ghi nhận người nhập/sửa)
+IF OBJECT_ID('dbo.vwLichSuCapNhatDienThoai', 'V') IS NOT NULL DROP VIEW dbo.vwLichSuCapNhatDienThoai;
+GO
+CREATE VIEW dbo.vwLichSuCapNhatDienThoai
+AS
+SELECT
+    dt.MaDT,
+    dt.TenDT,
+    dt.NgayNhap,
+    nvNhap.TenNV AS NguoiNhap,
+    dt.NgaySua,
+    nvSua.TenNV AS NguoiSua
+FROM dbo.tblDienThoai AS dt
+INNER JOIN dbo.tblNhanVien AS nvNhap ON nvNhap.MaNV = dt.NguoiNhap
+LEFT JOIN dbo.tblNhanVien AS nvSua ON nvSua.MaNV = dt.NguoiSua;
+GO
+
+PRINT N'✓ Tạo view vwLichSuCapNhatDienThoai';
+GO
+
+-- View 10: Hóa đơn phát sinh trong 30 ngày gần nhất
+IF OBJECT_ID('dbo.vwHoaDonGanDay', 'V') IS NOT NULL DROP VIEW dbo.vwHoaDonGanDay;
+GO
+CREATE VIEW dbo.vwHoaDonGanDay
+AS
+SELECT
+    hd.MaHD,
+    hd.NgayLap,
+    hd.TongTien,
+    kh.TenKH,
+    nv.TenNV AS TenNhanVien
+FROM dbo.tblHoaDon AS hd
+INNER JOIN dbo.tblKhachHang AS kh ON kh.MaKH = hd.MaKH
+INNER JOIN dbo.tblNhanVien AS nv ON nv.MaNV = hd.MaNV
+WHERE hd.NgayLap >= DATEADD(DAY, -30, GETDATE());
+GO
+
+PRINT N'✓ Tạo view vwHoaDonGanDay';
+GO
+
+PRINT N'Đang tạo các thủ tục thao tác dữ liệu...';
+GO
+
+-- Proc 1: Thêm khách hàng mới có ghi nhận người nhập
+IF OBJECT_ID('dbo.spThemKhachHangMoi', 'P') IS NOT NULL DROP PROCEDURE dbo.spThemKhachHangMoi;
+GO
+CREATE PROCEDURE dbo.spThemKhachHangMoi
+    @TenKH NVARCHAR(200),
+    @GioiTinh NVARCHAR(10),
+    @NgaySinh DATE = NULL,
+    @SoDT VARCHAR(15),
+    @Email VARCHAR(100) = NULL,
+    @DiaChi NVARCHAR(500) = NULL,
+    @NguoiNhap INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO dbo.tblKhachHang (TenKH, GioiTinh, NgaySinh, SoDT, Email, DiaChi, TichDiem, NguoiNhap, NgayNhap)
+    VALUES (@TenKH, @GioiTinh, @NgaySinh, @SoDT, @Email, @DiaChi, 0, @NguoiNhap, GETDATE());
+
+    SELECT SCOPE_IDENTITY() AS MaKhachHangMoi;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spThemKhachHangMoi';
+GO
+
+EXEC dbo.spThemKhachHangMoi
+    @TenKH = N'Khách hàng demo',
+    @GioiTinh = N'Nam',
+    @NgaySinh = '1995-01-01',
+    @SoDT = '0911111999',
+    @Email = 'demo_customer@gmail.com',
+    @DiaChi = N'12 Nguyễn Trãi, TP.HCM',
+    @NguoiNhap = 2;
+GO
+
+-- Proc 2: Cập nhật giá bán điện thoại và ghi nhận người sửa
+IF OBJECT_ID('dbo.spCapNhatGiaBanDienThoai', 'P') IS NOT NULL DROP PROCEDURE dbo.spCapNhatGiaBanDienThoai;
+GO
+CREATE PROCEDURE dbo.spCapNhatGiaBanDienThoai
+    @MaDT INT,
+    @GiaBanMoi DECIMAL(18,2),
+    @NguoiSua INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.tblDienThoai
+    SET GiaBan = @GiaBanMoi,
+        NguoiSua = @NguoiSua,
+        NgaySua = GETDATE()
+    WHERE MaDT = @MaDT;
+
+    SELECT MaDT, TenDT, GiaBan FROM dbo.tblDienThoai WHERE MaDT = @MaDT;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spCapNhatGiaBanDienThoai';
+GO
+
+EXEC dbo.spCapNhatGiaBanDienThoai
+    @MaDT = 2,
+    @GiaBanMoi = 20500000,
+    @NguoiSua = 1;
+GO
+
+-- Proc 3: Lấy doanh thu theo khoảng thời gian, có thể lọc theo nhân viên
+IF OBJECT_ID('dbo.spLayDoanhThuNhanVienTrongKhoang', 'P') IS NOT NULL DROP PROCEDURE dbo.spLayDoanhThuNhanVienTrongKhoang;
+GO
+CREATE PROCEDURE dbo.spLayDoanhThuNhanVienTrongKhoang
+    @TuNgay DATE,
+    @DenNgay DATE,
+    @MaNV INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        hd.MaNV,
+        nv.TenNV,
+        SUM(hd.TongTien) AS TongDoanhThu,
+        COUNT(hd.MaHD) AS SoHoaDon
+    FROM dbo.tblHoaDon AS hd
+    INNER JOIN dbo.tblNhanVien AS nv ON nv.MaNV = hd.MaNV
+    WHERE hd.NgayLap >= @TuNgay
+      AND hd.NgayLap < DATEADD(DAY, 1, @DenNgay)
+      AND (@MaNV IS NULL OR hd.MaNV = @MaNV)
+    GROUP BY hd.MaNV, nv.TenNV;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spLayDoanhThuNhanVienTrongKhoang';
+GO
+
+EXEC dbo.spLayDoanhThuNhanVienTrongKhoang
+    @TuNgay = '2024-11-01',
+    @DenNgay = '2024-12-31',
+    @MaNV = NULL;
+GO
+
+-- Proc 4: Thống kê sản phẩm bán chạy theo số lượng tùy theo TOP
+IF OBJECT_ID('dbo.spThongKeSanPhamBanChay', 'P') IS NOT NULL DROP PROCEDURE dbo.spThongKeSanPhamBanChay;
+GO
+CREATE PROCEDURE dbo.spThongKeSanPhamBanChay
+    @Top INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT TOP (@Top)
+        dt.MaDT,
+        dt.TenDT,
+        dt.HangSX,
+        SUM(cthd.SoLuong) AS TongSoLuong,
+        SUM(cthd.ThanhTien) AS TongDoanhThu
+    FROM dbo.tblDienThoai AS dt
+    INNER JOIN dbo.tblCTHoaDon AS cthd ON cthd.MaDT = dt.MaDT
+    GROUP BY dt.MaDT, dt.TenDT, dt.HangSX
+    ORDER BY SUM(cthd.SoLuong) DESC;
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spThongKeSanPhamBanChay';
+GO
+
+EXEC dbo.spThongKeSanPhamBanChay @Top = 3;
+GO
+
+-- Proc 5: Tìm kiếm điện thoại theo từ khóa tên hoặc hãng
+IF OBJECT_ID('dbo.spTimKiemDienThoaiTheoTuKhoa', 'P') IS NOT NULL DROP PROCEDURE dbo.spTimKiemDienThoaiTheoTuKhoa;
+GO
+CREATE PROCEDURE dbo.spTimKiemDienThoaiTheoTuKhoa
+    @TuKhoa NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        MaDT,
+        TenDT,
+        HangSX,
+        GiaBan,
+        MauSac
+    FROM dbo.tblDienThoai
+    WHERE TenDT LIKE N'%' + @TuKhoa + N'%'
+       OR HangSX LIKE N'%' + @TuKhoa + N'%';
+END;
+GO
+
+PRINT N'✓ Tạo thủ tục spTimKiemDienThoaiTheoTuKhoa';
+GO
+
+EXEC dbo.spTimKiemDienThoaiTheoTuKhoa @TuKhoa = N'iPhone';
+GO
+
+-- ============================================================================
+-- REQUIREMENT 6: PHÂN TÁN DỮ LIỆU (DATABASE DISTRIBUTION)
+-- Phân tán ngang (Horizontal Partitioning) và Phân tán dọc (Vertical Partitioning)
+-- ============================================================================
+
+PRINT N'';
+PRINT N'========================================================';
+PRINT N'REQUIREMENT 6: PHÂN TÁN DỮ LIỆU (Data Distribution)';
+PRINT N'========================================================';
+GO
+
+-- ============================================================================
+-- PART 1: PHÂN TÁN DỌC (VERTICAL PARTITIONING)
+-- Chia tblDienThoai thành 2 bảng: thông tin cơ bản + thông số kỹ thuật
+-- ============================================================================
+
+PRINT N'';
+PRINT N'[PART 1] PHÂN TÁN DỌC (VERTICAL PARTITIONING)';
+PRINT N'Mục đích: Tách bảng tblDienThoai thành 2 bảng riêng';
+PRINT N'- tblDienThoai_CoBan: Thông tin cơ bản';
+PRINT N'- tblDienThoai_ThongSoKyThuat: Thông số kỹ thuật';
+GO
+
+-- Bước 1: Tạo bảng thông tin cơ bản (Vertical Partition 1)
+IF OBJECT_ID('dbo.tblDienThoai_CoBan', 'U') IS NOT NULL DROP TABLE dbo.tblDienThoai_CoBan;
+GO
+
+PRINT N'Tạo bảng tblDienThoai_CoBan (Thông tin cơ bản)...';
+CREATE TABLE dbo.tblDienThoai_CoBan (
+    MaDT INT PRIMARY KEY IDENTITY(1,1),
+    TenDT NVARCHAR(200) NOT NULL,
+    HangSX NVARCHAR(100) NOT NULL,
+    GiaBan DECIMAL(18,2) NOT NULL CHECK (GiaBan >= 0),
+    MauSac NVARCHAR(50),
+    MoTa NVARCHAR(MAX),
+    TrangThai BIT DEFAULT 1,
+    NguoiNhap INT NOT NULL,
+    NgayNhap DATETIME DEFAULT GETDATE(),
+    NguoiSua INT NULL,
+    NgaySua DATETIME NULL,
+    FOREIGN KEY (NguoiNhap) REFERENCES tblNhanVien(MaNV),
+    FOREIGN KEY (NguoiSua) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Bảng tblDienThoai_CoBan được tạo';
+GO
+
+-- Bước 2: Tạo bảng thông số kỹ thuật (Vertical Partition 2)
+IF OBJECT_ID('dbo.tblDienThoai_ThongSoKyThuat', 'U') IS NOT NULL DROP TABLE dbo.tblDienThoai_ThongSoKyThuat;
+GO
+
+PRINT N'Tạo bảng tblDienThoai_ThongSoKyThuat (Thông số kỹ thuật)...';
+CREATE TABLE dbo.tblDienThoai_ThongSoKyThuat (
+    MaDT INT PRIMARY KEY,
+    ManHinh NVARCHAR(100),
+    Camera NVARCHAR(100),
+    Pin NVARCHAR(50),
+    RAM NVARCHAR(20),
+    BoNho NVARCHAR(20),
+    FOREIGN KEY (MaDT) REFERENCES tblDienThoai_CoBan(MaDT) ON DELETE CASCADE
+);
+PRINT N'✓ Bảng tblDienThoai_ThongSoKyThuat được tạo';
+GO
+
+-- Bước 3: Chèn dữ liệu từ bảng gốc vào bảng phân tán dọc
+PRINT N'Chèn dữ liệu vào bảng phân tán dọc...';
+GO
+
+INSERT INTO dbo.tblDienThoai_CoBan (TenDT, HangSX, GiaBan, MauSac, MoTa, TrangThai, NguoiNhap, NgayNhap)
+SELECT TenDT, HangSX, GiaBan, MauSac, MoTa, TrangThai, NguoiNhap, NgayNhap
+FROM dbo.tblDienThoai;
+
+INSERT INTO dbo.tblDienThoai_ThongSoKyThuat (MaDT, ManHinh, Camera, Pin, RAM, BoNho)
+SELECT MaDT, ManHinh, Camera, Pin, RAM, BoNho
+FROM dbo.tblDienThoai;
+
+PRINT N'✓ Dữ liệu đã được chèn vào bảng phân tán dọc';
+GO
+
+-- View để hợp nhất dữ liệu từ 2 bảng phân tán dọc
+IF OBJECT_ID('dbo.vwDienThoaiDayDu_VerticalPartition', 'V') IS NOT NULL DROP VIEW dbo.vwDienThoaiDayDu_VerticalPartition;
+GO
+
+CREATE VIEW dbo.vwDienThoaiDayDu_VerticalPartition
+AS
+SELECT
+    cb.MaDT,
+    cb.TenDT,
+    cb.HangSX,
+    cb.GiaBan,
+    ts.ManHinh,
+    ts.Camera,
+    ts.Pin,
+    ts.RAM,
+    ts.BoNho,
+    cb.MauSac,
+    cb.MoTa,
+    cb.TrangThai
+FROM dbo.tblDienThoai_CoBan cb
+INNER JOIN dbo.tblDienThoai_ThongSoKyThuat ts ON cb.MaDT = ts.MaDT;
+GO
+
+PRINT N'✓ View vwDienThoaiDayDu_VerticalPartition được tạo';
+GO
+
+-- ============================================================================
+-- PART 2: PHÂN TÁN NGANG (HORIZONTAL PARTITIONING)
+-- Chia tblHoaDon theo khoảng thời gian: Q1, Q2, Q3, Q4
+-- ============================================================================
+
+PRINT N'';
+PRINT N'[PART 2] PHÂN TÁN NGANG (HORIZONTAL PARTITIONING)';
+PRINT N'Mục đích: Chia bảng tblHoaDon theo quý (Q1, Q2, Q3, Q4)';
+GO
+
+-- Bước 1: Tạo bảng cho Q1 (Tháng 1-3)
+IF OBJECT_ID('dbo.tblHoaDon_Q1', 'U') IS NOT NULL DROP TABLE dbo.tblHoaDon_Q1;
+GO
+
+PRINT N'Tạo bảng tblHoaDon_Q1 (Quý 1: Tháng 1-3)...';
+CREATE TABLE dbo.tblHoaDon_Q1 (
+    MaHD INT PRIMARY KEY IDENTITY(1,1),
+    MaKH INT NOT NULL,
+    MaNV INT NOT NULL,
+    NgayLap DATETIME DEFAULT GETDATE(),
+    TongTien DECIMAL(18,2) DEFAULT 0 CHECK (TongTien >= 0),
+    GhiChu NVARCHAR(MAX),
+    CHECK (MONTH(NgayLap) BETWEEN 1 AND 3),
+    FOREIGN KEY (MaKH) REFERENCES tblKhachHang(MaKH),
+    FOREIGN KEY (MaNV) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Bảng tblHoaDon_Q1 được tạo';
+GO
+
+-- Bước 2: Tạo bảng cho Q2 (Tháng 4-6)
+IF OBJECT_ID('dbo.tblHoaDon_Q2', 'U') IS NOT NULL DROP TABLE dbo.tblHoaDon_Q2;
+GO
+
+PRINT N'Tạo bảng tblHoaDon_Q2 (Quý 2: Tháng 4-6)...';
+CREATE TABLE dbo.tblHoaDon_Q2 (
+    MaHD INT PRIMARY KEY IDENTITY(1,1),
+    MaKH INT NOT NULL,
+    MaNV INT NOT NULL,
+    NgayLap DATETIME DEFAULT GETDATE(),
+    TongTien DECIMAL(18,2) DEFAULT 0 CHECK (TongTien >= 0),
+    GhiChu NVARCHAR(MAX),
+    CHECK (MONTH(NgayLap) BETWEEN 4 AND 6),
+    FOREIGN KEY (MaKH) REFERENCES tblKhachHang(MaKH),
+    FOREIGN KEY (MaNV) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Bảng tblHoaDon_Q2 được tạo';
+GO
+
+-- Bước 3: Tạo bảng cho Q3 (Tháng 7-9)
+IF OBJECT_ID('dbo.tblHoaDon_Q3', 'U') IS NOT NULL DROP TABLE dbo.tblHoaDon_Q3;
+GO
+
+PRINT N'Tạo bảng tblHoaDon_Q3 (Quý 3: Tháng 7-9)...';
+CREATE TABLE dbo.tblHoaDon_Q3 (
+    MaHD INT PRIMARY KEY IDENTITY(1,1),
+    MaKH INT NOT NULL,
+    MaNV INT NOT NULL,
+    NgayLap DATETIME DEFAULT GETDATE(),
+    TongTien DECIMAL(18,2) DEFAULT 0 CHECK (TongTien >= 0),
+    GhiChu NVARCHAR(MAX),
+    CHECK (MONTH(NgayLap) BETWEEN 7 AND 9),
+    FOREIGN KEY (MaKH) REFERENCES tblKhachHang(MaKH),
+    FOREIGN KEY (MaNV) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Bảng tblHoaDon_Q3 được tạo';
+GO
+
+-- Bước 4: Tạo bảng cho Q4 (Tháng 10-12)
+IF OBJECT_ID('dbo.tblHoaDon_Q4', 'U') IS NOT NULL DROP TABLE dbo.tblHoaDon_Q4;
+GO
+
+PRINT N'Tạo bảng tblHoaDon_Q4 (Quý 4: Tháng 10-12)...';
+CREATE TABLE dbo.tblHoaDon_Q4 (
+    MaHD INT PRIMARY KEY IDENTITY(1,1),
+    MaKH INT NOT NULL,
+    MaNV INT NOT NULL,
+    NgayLap DATETIME DEFAULT GETDATE(),
+    TongTien DECIMAL(18,2) DEFAULT 0 CHECK (TongTien >= 0),
+    GhiChu NVARCHAR(MAX),
+    CHECK (MONTH(NgayLap) BETWEEN 10 AND 12),
+    FOREIGN KEY (MaKH) REFERENCES tblKhachHang(MaKH),
+    FOREIGN KEY (MaNV) REFERENCES tblNhanVien(MaNV)
+);
+PRINT N'✓ Bảng tblHoaDon_Q4 được tạo';
+GO
+
+-- Bước 5: Chèn dữ liệu vào bảng phân tán ngang dựa trên tháng
+PRINT N'Chèn dữ liệu vào bảng phân tán ngang...';
+GO
+
+-- Chèn dữ liệu vào Q1
+INSERT INTO dbo.tblHoaDon_Q1 (MaKH, MaNV, NgayLap, TongTien, GhiChu)
+SELECT MaKH, MaNV, NgayLap, TongTien, GhiChu
+FROM dbo.tblHoaDon
+WHERE MONTH(NgayLap) BETWEEN 1 AND 3;
+
+-- Chèn dữ liệu vào Q2
+INSERT INTO dbo.tblHoaDon_Q2 (MaKH, MaNV, NgayLap, TongTien, GhiChu)
+SELECT MaKH, MaNV, NgayLap, TongTien, GhiChu
+FROM dbo.tblHoaDon
+WHERE MONTH(NgayLap) BETWEEN 4 AND 6;
+
+-- Chèn dữ liệu vào Q3
+INSERT INTO dbo.tblHoaDon_Q3 (MaKH, MaNV, NgayLap, TongTien, GhiChu)
+SELECT MaKH, MaNV, NgayLap, TongTien, GhiChu
+FROM dbo.tblHoaDon
+WHERE MONTH(NgayLap) BETWEEN 7 AND 9;
+
+-- Chèn dữ liệu vào Q4
+INSERT INTO dbo.tblHoaDon_Q4 (MaKH, MaNV, NgayLap, TongTien, GhiChu)
+SELECT MaKH, MaNV, NgayLap, TongTien, GhiChu
+FROM dbo.tblHoaDon
+WHERE MONTH(NgayLap) BETWEEN 10 AND 12;
+
+PRINT N'✓ Dữ liệu đã được chèn vào bảng phân tán ngang (Q1-Q4)';
+GO
+
+-- ============================================================================
+-- PART 3: VIEW HỢP NHẤT DỮ LIỆU PHÂN TÁN NGANG
+-- ============================================================================
+
+IF OBJECT_ID('dbo.vwHoaDonDayDu_HorizontalPartition', 'V') IS NOT NULL DROP VIEW dbo.vwHoaDonDayDu_HorizontalPartition;
+GO
+
+CREATE VIEW dbo.vwHoaDonDayDu_HorizontalPartition
+AS
+SELECT MaHD, MaKH, MaNV, NgayLap, TongTien, GhiChu, 'Q1' AS Quy
+FROM dbo.tblHoaDon_Q1
+UNION ALL
+SELECT MaHD, MaKH, MaNV, NgayLap, TongTien, GhiChu, 'Q2' AS Quy
+FROM dbo.tblHoaDon_Q2
+UNION ALL
+SELECT MaHD, MaKH, MaNV, NgayLap, TongTien, GhiChu, 'Q3' AS Quy
+FROM dbo.tblHoaDon_Q3
+UNION ALL
+SELECT MaHD, MaKH, MaNV, NgayLap, TongTien, GhiChu, 'Q4' AS Quy
+FROM dbo.tblHoaDon_Q4;
+GO
+
+PRINT N'✓ View vwHoaDonDayDu_HorizontalPartition được tạo';
+GO
+
+-- ============================================================================
+-- PART 4: THỦ TỤC LẤY DỮ LIỆU TỪ BẢNG PHÂN TÁN
+-- ============================================================================
+
+PRINT N'';
+PRINT N'[PART 4] THỦ TỤC LẤY DỮ LIỆU PHÂN TÁN';
+GO
+
+-- Proc 1: Lấy doanh thu từ tất cả quý (hợp nhất từ bảng phân tán ngang)
+IF OBJECT_ID('dbo.spLayDoanhThuFromPartitions', 'P') IS NOT NULL DROP PROCEDURE dbo.spLayDoanhThuFromPartitions;
+GO
+
+CREATE PROCEDURE dbo.spLayDoanhThuFromPartitions
+    @Quy INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @Quy IS NULL
+    BEGIN
+        -- Lấy tất cả dữ liệu từ tất cả quý
+        SELECT
+            'Q1' AS Quy,
+            COUNT(*) AS SoHoaDon,
+            SUM(TongTien) AS TongDoanhThu
+        FROM dbo.tblHoaDon_Q1
+        UNION ALL
+        SELECT
+            'Q2' AS Quy,
+            COUNT(*) AS SoHoaDon,
+            SUM(TongTien) AS TongDoanhThu
+        FROM dbo.tblHoaDon_Q2
+        UNION ALL
+        SELECT
+            'Q3' AS Quy,
+            COUNT(*) AS SoHoaDon,
+            SUM(TongTien) AS TongDoanhThu
+        FROM dbo.tblHoaDon_Q3
+        UNION ALL
+        SELECT
+            'Q4' AS Quy,
+            COUNT(*) AS SoHoaDon,
+            SUM(TongTien) AS TongDoanhThu
+        FROM dbo.tblHoaDon_Q4;
+    END
+    ELSE IF @Quy = 1
+        SELECT COUNT(*) AS SoHoaDon, SUM(TongTien) AS TongDoanhThu FROM dbo.tblHoaDon_Q1;
+    ELSE IF @Quy = 2
+        SELECT COUNT(*) AS SoHoaDon, SUM(TongTien) AS TongDoanhThu FROM dbo.tblHoaDon_Q2;
+    ELSE IF @Quy = 3
+        SELECT COUNT(*) AS SoHoaDon, SUM(TongTien) AS TongDoanhThu FROM dbo.tblHoaDon_Q3;
+    ELSE IF @Quy = 4
+        SELECT COUNT(*) AS SoHoaDon, SUM(TongTien) AS TongDoanhThu FROM dbo.tblHoaDon_Q4;
+END;
+GO
+
+PRINT N'✓ Thủ tục spLayDoanhThuFromPartitions được tạo';
+GO
+
+-- Proc 2: Lấy thông tin điện thoại từ bảng phân tán dọc
+IF OBJECT_ID('dbo.spLayThongTinDienThoaiVertical', 'P') IS NOT NULL DROP PROCEDURE dbo.spLayThongTinDienThoaiVertical;
+GO
+
+CREATE PROCEDURE dbo.spLayThongTinDienThoaiVertical
+    @HangSX NVARCHAR(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        cb.MaDT,
+        cb.TenDT,
+        cb.HangSX,
+        cb.GiaBan,
+        ts.ManHinh,
+        ts.Camera,
+        ts.Pin,
+        ts.RAM,
+        ts.BoNho,
+        cb.MauSac
+    FROM dbo.tblDienThoai_CoBan cb
+    INNER JOIN dbo.tblDienThoai_ThongSoKyThuat ts ON cb.MaDT = ts.MaDT
+    WHERE (@HangSX IS NULL OR cb.HangSX = @HangSX)
+      AND cb.TrangThai = 1;
+END;
+GO
+
+PRINT N'✓ Thủ tục spLayThongTinDienThoaiVertical được tạo';
+GO
+
+-- ============================================================================
+-- PART 5: TRUY VẤN MINH HỌA DỮ LIỆU PHÂN TÁN
+-- ============================================================================
+
+PRINT N'';
+PRINT N'[PART 5] TRUY VẤN MINH HỌA DỮ LIỆU PHÂN TÁN';
+PRINT N'';
+GO
+
+PRINT N'=== Dữ liệu phân tán dọc (Vertical) ===';
+SELECT * FROM dbo.vwDienThoaiDayDu_VerticalPartition;
+GO
+
+PRINT N'';
+PRINT N'=== Dữ liệu phân tán ngang (Horizontal) ===';
+SELECT * FROM dbo.vwHoaDonDayDu_HorizontalPartition ORDER BY Quy, NgayLap;
+GO
+
+PRINT N'';
+PRINT N'=== Doanh thu theo quý (từ bảng phân tán ngang) ===';
+EXEC dbo.spLayDoanhThuFromPartitions;
+GO
+
+PRINT N'';
+PRINT N'=== Thông tin điện thoại từ bảng phân tán dọc ===';
+EXEC dbo.spLayThongTinDienThoaiVertical @HangSX = N'Apple';
+
+GO
