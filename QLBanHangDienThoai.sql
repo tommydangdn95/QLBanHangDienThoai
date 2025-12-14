@@ -987,3 +987,335 @@ PRINT N'=== Thông tin điện thoại từ bảng phân tán dọc ===';
 EXEC dbo.spLayThongTinDienThoaiVertical @HangSX = N'Apple';
 
 GO
+
+
+--------------------------------------------
+-- QUESTION 4: TẠO CÁC TRIGGER
+-- Trigger 1: Cập nhật tổng tiền hóa đơn sau khi thêm/sửa/xóa CTHD
+--------------------------------------------
+CREATE TRIGGER trg_UpdateTongTienHoaDon
+ON dbo.tblCTHoaDon
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE H
+    SET H.TongTien = (
+        SELECT SUM(CT.DonGia * CT.SoLuong)
+        FROM dbo.tblCTHoaDon CT
+        WHERE CT.MaHD  = H.MaHD 
+    )
+    FROM dbo.tblHoaDon H
+    WHERE H.MaHD  IN (
+        SELECT MaHD  FROM inserted
+        UNION
+        SELECT MaHD  FROM deleted
+    );
+END;
+GO
+
+-- CHECK TRIGGER
+select * from tblHoaDon where MaHD = 1;
+select * from tblCTHoaDon where MaHD = 1;;
+
+update tblCTHoaDon
+set DonGia = 30000000, SoLuong = 2, ThanhTien = DonGia*SoLuong
+where MaHD = 1;
+
+select * from tblHoaDon where MaHD = 1;
+select * from tblCTHoaDon where MaHD = 1;;
+
+
+--------------------------------------------
+-- Trigger 2: Kiểm tra và giảm số lượng tồn trước khi bán
+--------------------------------------------
+-- Thêm cột số lượng còn lại vào bảng Điện thoại
+-- Thêm cột số lượng còn lại vào bảng Điện thoại
+ALTER TABLE tblDienThoai ADD SoLuongTon INT DEFAULT 10;
+
+CREATE TRIGGER trg_KiemTraVaCapNhatTonKho
+ON dbo.tblCTHoaDon
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ----------------------------------------
+    -- 1. Kiểm tra số lượng tồn trước khi bán
+    ----------------------------------------
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN dbo.tblDienThoai dt ON dt.madt = i.madt
+        WHERE i.SoLuong > dt.SoLuongTon
+    )
+    BEGIN
+        RAISERROR('So luong ban vuot qua so luong ton!', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+
+    ----------------------------------------
+    -- 2. Giảm số lượng tồn kho sau khi bán
+    ----------------------------------------
+    UPDATE dt
+    SET dt.SoLuongTon = dt.SoLuongTon - i.SoLuong
+    FROM dbo.tblDienThoai dt
+    JOIN inserted i ON dt.madt = i.madt;
+END;
+GO
+
+-- CHECK TRIGGER
+--Update số lượng tồn kho = 1
+update tblDienThoai 
+set soluongton = 1;
+select maDT, TenDT, soluongton from tblDienThoai;
+
+-- Khi thực hiện insert bảng chi tiết hóa đơn có số lượng = 2 
+-- thì trigger sẽ hoạt động và thông báo vượt quá số lượng
+INSERT INTO [dbo].[tblCTHoaDon]
+           ([MaHD]
+           ,[MaDT]
+           ,[SoLuong]
+           ,[DonGia]
+           ,[GiamGia]
+           ,[ThanhTien])
+     VALUES
+           (2, 1, 2, 0, 0, 0)
+GO
+
+
+--------------------------------------------
+-- Trigger 3: Kiểm tra khách hàng tồn tại  khi lập hóa đơn
+--------------------------------------------
+CREATE TRIGGER trg_Check_NV_HoaDon
+ON tblHoaDon
+FOR INSERT, UPDATE
+AS
+BEGIN
+    -- Kiểm tra mã nhân viên có tồn tại hay không
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM inserted i
+        LEFT JOIN tblNhanVien nv ON i.MaNV = nv.MaNV
+        WHERE nv.MaNV IS NULL 
+		AND i.MaKH IS NOT NULL
+		AND nv.TrangThai = 1
+    )
+    BEGIN
+        PRINT N'Không tồn tại nhân viên có mã tương ứng (hoặc nhân viên đã nghỉ), đề nghị cập nhật thông tin';
+        ROLLBACK TRANSACTION;
+    END
+END;
+GO
+
+-- CHECK TRIGGER
+-- Mô tả khi tác động vào dữ liệu thêm thông tin vào bảng Hóa đơn, nhưng với mã khách hàng không có (ví dụ 100) 
+-- thì Trigger sẽ thực thi và thông báo Không tồn tại khách hàng
+update tblNhanVien set TrangThai = 0 where MaNV = 5;
+INSERT INTO [dbo].[tblHoaDon]
+           ([MaKH]
+           ,[MaNV]
+           ,[NgayLap]
+           ,[TongTien]
+           ,[GhiChu])
+     VALUES
+           (1
+           ,5
+           ,GETDATE()
+           ,100
+           ,'Hoa Don Loi')
+GO
+
+--------------------------------------------
+-- Trigger 4: Ghi log thay đổi giá điện thoại
+--------------------------------------------
+-- Yêu cầu có bảng tblLichSuGiaDienThoai trước khi tạo trigger
+CREATE TABLE dbo.tblLichSuGiaDienThoai (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    MaDienThoai INT,
+    GiaCu DECIMAL(18,2),
+    GiaMoi DECIMAL(18,2),
+    NgayThayDoi DATETIME DEFAULT GETDATE(),
+    UserThayDoi NVARCHAR(100)   -- Username login của người thực hiện thay đổi
+);
+
+-- Tạo trigger ghi log khi có thay đổi
+CREATE TABLE dbo.tblLichSuGiaDienThoai (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    MaDienThoai INT,
+    GiaCu DECIMAL(18,2),
+    GiaMoi DECIMAL(18,2),
+    NgayThayDoi DATETIME DEFAULT GETDATE(),
+    UserThayDoi NVARCHAR(100)   -- Username login của người thực hiện thay đổi
+);
+
+-- Tạo trigger ghi log khi có thay đổi
+CREATE TRIGGER trg_LogThayDoiGia
+ON dbo.tblDienThoai
+FOR UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO dbo.tblLichSuGiaDienThoai(
+        MaDienThoai, 
+        GiaCu, 
+        GiaMoi, 
+        UserThayDoi
+    )
+    SELECT 
+        d.MaDT,
+        d.GiaBan AS GiaCu,
+        i.GiaBan AS GiaMoi,
+        ORIGINAL_LOGIN()  -- Thông tin tài khoản đăng nhập SQL server thao tác
+    FROM inserted i
+    JOIN deleted d ON i.MaDT = d.MaDT
+    WHERE d.GiaBan <> i.GiaBan;   -- chỉ ghi log khi giá thay đổi
+END;
+
+-- CHECK TRIGGER
+-- Bảng Log không có dữ liệu
+delete from tblLichSuGiaDienThoai;
+select * from tblLichSuGiaDienThoai;
+
+-- Thay đổi giá trong bảng Điện thoại, Bảng log sẽ được thêm dữ liệu
+update tblDienThoai set GiaBan = 12000 where MaDT = 1;
+select * from tblLichSuGiaDienThoai;
+
+--------------------------------------------
+-- Trigger 5: Cập nhật ngày chỉnh sửa cuối của thông tin khách hàng
+--------------------------------------------
+CREATE TRIGGER trg_UpdateNgayCapNhatKhachHang
+ON dbo.tblKhachHang
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE KH
+    SET KH.NgaySua = GETDATE(), 
+        GhiChu = N'TK sửa: '+ ORIGINAL_LOGIN()  -- Thông tin tài khoản đăng nhập SQL server thao tác
+    FROM dbo.tblKhachHang KH
+    JOIN inserted i ON KH.MaKH = i.MaKH;
+END;
+GO
+
+-- CHECK TRIGGER
+-- Cập nhật thông tin khách hàng, trường NgaySua và nguoiSua sẽ 
+-- được cập nhật theo thời gian thay đổi dữ liệu
+update tblKhachHang
+set TenKH = N'Nguyễn Hoàng Vũ'
+where MaKH = 1;
+select * from tblKhachHang where MaKH = 1; 
+
+
+--------------------------------------------
+-- QUESTION 5: PHÂN QUYỀN
+-- Tạo LOGIN & USER trong SQL Server
+--------------------------------------------
+
+-- 1. Tạo LOGIN cho uSale và uAccountant (ở mức Server)
+CREATE LOGIN uSale WITH PASSWORD = 'Sale@123', CHECK_POLICY = ON;
+CREATE LOGIN uAccountant WITH PASSWORD = 'Acc@123', CHECK_POLICY = ON;
+GO
+
+-- 2. Gán LOGIN vào Database QLBanHang (tạo USER)
+USE QLBanHangDienThoai;
+GO
+
+CREATE USER uSale FOR LOGIN uSale;
+CREATE USER uAccountant FOR LOGIN uAccountant;
+GO
+
+--------------------------------------------
+-- Quyền sử dụng database
+--------------------------------------------
+GRANT CONNECT TO uSale;
+GRANT CONNECT TO uAccountant;
+GO
+
+--------------------------------------------
+-- Phân quyền cho uSale: quản lý kho
+--------------------------------------------
+-- Quyền truy cập các bảng:
+--   tblDienThoai, tblDienThoai_CoBan, tblDienThoai_ThongSoKyThuat
+GRANT SELECT, INSERT, UPDATE ON dbo.tblDienThoai TO uSale;
+GRANT SELECT, INSERT, UPDATE ON dbo.tblDienThoai_CoBan TO uSale;
+GRANT SELECT, INSERT, UPDATE ON dbo.tblDienThoai_ThongSoKyThuat TO uSale;
+GO
+-- Quyền Thực thi procedure spThemKhachHangMoi
+GRANT EXECUTE ON dbo.spThemKhachHangMoi TO uSale;
+GO
+-- Quyền chỉnh sửa procedure spThemKhachHangMoi
+GRANT ALTER ON OBJECT::dbo.spThemKhachHangMoi TO uSale;
+GO
+
+--------------------------------------------
+-- Phân quyền cho uAccountant: kế toán
+-- Quyền truy cập các bảng:
+--   tblCTHoaDon, tblHoaDon, tblKhachHang, tblNhanVien
+--------------------------------------------
+GRANT SELECT, INSERT, UPDATE ON dbo.tblCTHoaDon TO uAccountant;
+GRANT SELECT, INSERT, UPDATE ON dbo.tblHoaDon TO uAccountant;
+GRANT SELECT, INSERT, UPDATE ON dbo.tblKhachHang TO uAccountant;
+GRANT SELECT, INSERT, UPDATE ON dbo.tblNhanVien TO uAccountant;
+GO
+-- Quyền Thực thi procedure spCapNhatGiaBanDienThoai
+GRANT EXECUTE ON dbo.spCapNhatGiaBanDienThoai TO uAccountant;
+-- Quyền chỉnh sửa procedure spCapNhatGiaBanDienThoai
+GRANT ALTER ON OBJECT::dbo.spCapNhatGiaBanDienThoai TO uAccountant;
+GO
+
+-- CHECK PHÂN QUYỀN
+-- Select dữ liệu được phân quyèn
+select * from tblCTHoaDon;
+select * from tblHoaDon;
+select * from tblKhachHang;
+select * from tblNhanVien;
+
+select * from tblDienThoai;
+select * from tblDienThoai_CoBan;
+select * from tblDienThoai_ThongSoKyThuat
+
+-- Execute procedure được phân quyền
+EXEC [dbo].[spCapNhatGiaBanDienThoai]
+    @MaDT = 1,         -- Mã điện thoại cần cập nhật
+    @GiaBanMoi = 500000,  -- Giá bán mới
+    @NguoiSua = 1;    -- ID người thực hiện cập nhật
+
+
+ALTER PROCEDURE [dbo].[spCapNhatGiaBanDienThoai]
+    @MaDT INT,
+    @GiaBanMoi DECIMAL(18,2),
+    @NguoiSua INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.tblDienThoai
+    SET GiaBan = @GiaBanMoi,
+        NguoiSua = @NguoiSua,
+        NgaySua = GETDATE()
+    WHERE MaDT = @MaDT;
+
+    SELECT MaDT, TenDT, GiaBan FROM dbo.tblDienThoai WHERE MaDT = @MaDT;
+END;
+
+
+ALTER PROCEDURE [dbo].[spThemKhachHangMoi]
+    @TenKH NVARCHAR(200),
+    @GioiTinh NVARCHAR(10),
+    @NgaySinh DATE = NULL,
+    @SoDT VARCHAR(15),
+    @Email VARCHAR(100) = NULL,
+    @DiaChi NVARCHAR(500) = NULL,
+    @NguoiNhap INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+	    INSERT INTO dbo.tblKhachHang (TenKH, GioiTinh, NgaySinh, SoDT, Email, DiaChi, TichDiem, NguoiNhap, NgayNhap)
+    VALUES (@TenKH, @GioiTinh, @NgaySinh, @SoDT, @Email, @DiaChi, 0, @NguoiNhap, GETDATE());
+	    SELECT SCOPE_IDENTITY() AS MaKhachHangMoi;
+END;
